@@ -12,7 +12,7 @@ app.use(express.json());
 // Allow CORS from frontend (localhost:5173 in local dev)
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin:["http://localhost:5173","https://organic-potato-4jg9w56rxqpj27jv-5173.app.github.dev"], 
     methods: ["GET", "POST"],
   })
 );
@@ -28,9 +28,12 @@ const server = http.createServer(app);
 // Attach Socket.IO to HTTP server
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:5173",
+    origin: ["http://localhost:5173", "https://organic-potato-4jg9w56rxqpj27jv-5173.app.github.dev"],
     methods: ["GET", "POST"],
+    credentials: true,
   },
+  allowEIO3: true,
+  path: "/socket.io"
 });
 
 // --- REAL-TIME LOGIC ---

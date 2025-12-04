@@ -1,14 +1,65 @@
 import { useRef, useEffect, useState } from "react";
+import { io } from "socket.io-client";
+
+const SOCKET_URL = "https://organic-potato-4jg9w56rxqpj27jv-4000.app.github.dev";
 
 function Whiteboard({ roomId, userName, onLeave }) {
   const canvasRef = useRef(null);
   const isDrawingRef = useRef(false);
   const lastPointRef = useRef({ x: 0, y: 0 });
 
+  const socketRef = useRef(null);
+
   const [color, setColor] = useState("#ffffff");
   const [lineWidth, setLineWidth] = useState(3);
+  const [status, setStatus] = useState("Connecting...");
 
-  // Resize canvas to container size while preserving content
+  // --- Socket.IO setup ---
+  useEffect(() => {
+    // Create socket connection
+    const socket = io(SOCKET_URL, {
+      transports: ["websocket"],
+      secure: true,
+      rejectUnauthorized: false,
+      path: "/socket.io",
+    });
+
+    socketRef.current = socket;
+
+    socket.on("connect", () => {
+      setStatus("Connected");
+      // Join the room once connected
+      socket.emit("join_room", { roomId, userName });
+    });
+
+    socket.on("disconnect", () => {
+      setStatus("Disconnected");
+    });
+
+    socket.on("user_joined", (data) => {
+      console.log("User joined:", data);
+    });
+
+    // When other users draw, we render their strokes
+    socket.on("draw", (data) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      const { x0, y0, x1, y1, color, lineWidth } = data;
+      drawLine(ctx, x0, y0, x1, y1, color, lineWidth);
+    });
+
+    // When another user clears the board
+    socket.on("clear", () => {
+      clearCanvas();
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [roomId, userName]);
+
+  // --- Canvas resizing ---
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -67,7 +118,20 @@ function Whiteboard({ roomId, userName, onLeave }) {
     const { x: x0, y: y0 } = lastPointRef.current;
     const { x: x1, y: y1 } = newPos;
 
+    // Draw locally
     drawLine(ctx, x0, y0, x1, y1, color, lineWidth);
+
+    // Send to others in the room
+    socketRef.current?.emit("draw", {
+      roomId,
+      x0,
+      y0,
+      x1,
+      y1,
+      color,
+      lineWidth,
+    });
+
     lastPointRef.current = newPos;
   };
 
@@ -83,6 +147,13 @@ function Whiteboard({ roomId, userName, onLeave }) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   };
 
+  const handleClear = () => {
+    // Clear locally
+    clearCanvas();
+    // Ask others to clear
+    socketRef.current?.emit("clear", roomId);
+  };
+
   return (
     <div className="layout">
       <header>
@@ -91,7 +162,7 @@ function Whiteboard({ roomId, userName, onLeave }) {
             Room: {roomId}
           </div>
           <div style={{ fontSize: "0.8rem", color: "#9ca3af" }}>
-            User: {userName}
+            User: {userName} • Status: {status}
           </div>
         </div>
         <button className="button-danger toolbar-button" onClick={onLeave}>
@@ -100,7 +171,9 @@ function Whiteboard({ roomId, userName, onLeave }) {
       </header>
 
       <div className="toolbar">
-        <div className="toolbar-spacer">Collaborative Whiteboard</div>
+        <div className="toolbar-spacer">
+          Collaborative Whiteboard
+        </div>
         <label>
           Color
           <input
@@ -120,7 +193,7 @@ function Whiteboard({ roomId, userName, onLeave }) {
             onChange={(e) => setLineWidth(parseInt(e.target.value))}
           />
         </label>
-        <button onClick={clearCanvas}>Clear</button>
+        <button onClick={handleClear}>Clear</button>
       </div>
 
       <div className="main-canvas-container">
