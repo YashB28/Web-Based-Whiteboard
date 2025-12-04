@@ -1,7 +1,10 @@
 import { useRef, useEffect, useState } from "react";
 import { io } from "socket.io-client";
 
-const SOCKET_URL = "https://organic-potato-4jg9w56rxqpj27jv-4000.app.github.dev";
+// Backend Socket.IO + API base URL
+const SOCKET_URL =
+  "https://organic-potato-4jg9w56rxqpj27jv-4000.app.github.dev";
+const API_BASE = SOCKET_URL;
 
 function Whiteboard({ roomId, userName, onLeave }) {
   const canvasRef = useRef(null);
@@ -13,22 +16,17 @@ function Whiteboard({ roomId, userName, onLeave }) {
   const [color, setColor] = useState("#ffffff");
   const [lineWidth, setLineWidth] = useState(3);
   const [status, setStatus] = useState("Connecting...");
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   // --- Socket.IO setup ---
   useEffect(() => {
-    // Create socket connection
-    const socket = io(SOCKET_URL, {
-      transports: ["websocket"],
-      secure: true,
-      rejectUnauthorized: false,
-      path: "/socket.io",
-    });
+    const socket = io(SOCKET_URL);
 
     socketRef.current = socket;
 
     socket.on("connect", () => {
       setStatus("Connected");
-      // Join the room once connected
       socket.emit("join_room", { roomId, userName });
     });
 
@@ -40,7 +38,6 @@ function Whiteboard({ roomId, userName, onLeave }) {
       console.log("User joined:", data);
     });
 
-    // When other users draw, we render their strokes
     socket.on("draw", (data) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -49,7 +46,6 @@ function Whiteboard({ roomId, userName, onLeave }) {
       drawLine(ctx, x0, y0, x1, y1, color, lineWidth);
     });
 
-    // When another user clears the board
     socket.on("clear", () => {
       clearCanvas();
     });
@@ -118,10 +114,8 @@ function Whiteboard({ roomId, userName, onLeave }) {
     const { x: x0, y: y0 } = lastPointRef.current;
     const { x: x1, y: y1 } = newPos;
 
-    // Draw locally
     drawLine(ctx, x0, y0, x1, y1, color, lineWidth);
 
-    // Send to others in the room
     socketRef.current?.emit("draw", {
       roomId,
       x0,
@@ -148,10 +142,62 @@ function Whiteboard({ roomId, userName, onLeave }) {
   };
 
   const handleClear = () => {
-    // Clear locally
     clearCanvas();
-    // Ask others to clear
     socketRef.current?.emit("clear", roomId);
+  };
+
+  const handleSave = async () => {
+    try {
+      setIsSaving(true);
+      const canvas = canvasRef.current;
+      const imageData = canvas.toDataURL("image/png");
+      const res = await fetch(`${API_BASE}/api/sessions/save`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomId,
+          userName,
+          imageData,
+        }),
+      });
+      const data = await res.json();
+      console.log("Save response:", data);
+      if (!res.ok) {
+        alert("Error saving: " + (data.error || "Unknown error"));
+      } else {
+        alert("Whiteboard saved (" + data.action + ").");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error saving whiteboard");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleLoad = async () => {
+    try {
+      setIsLoading(true);
+      const res = await fetch(`${API_BASE}/api/sessions/${roomId}`);
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "No saved session for this room.");
+        return;
+      }
+      const img = new Image();
+      img.onload = () => {
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext("2d");
+        clearCanvas();
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      };
+      img.src = data.imageData;
+    } catch (err) {
+      console.error(err);
+      alert("Error loading whiteboard");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -171,9 +217,7 @@ function Whiteboard({ roomId, userName, onLeave }) {
       </header>
 
       <div className="toolbar">
-        <div className="toolbar-spacer">
-          Collaborative Whiteboard
-        </div>
+        <div className="toolbar-spacer">Collaborative Whiteboard</div>
         <label>
           Color
           <input
@@ -194,6 +238,12 @@ function Whiteboard({ roomId, userName, onLeave }) {
           />
         </label>
         <button onClick={handleClear}>Clear</button>
+        <button onClick={handleSave} disabled={isSaving}>
+          {isSaving ? "Saving..." : "Save"}
+        </button>
+        <button onClick={handleLoad} disabled={isLoading}>
+          {isLoading ? "Loading..." : "Load"}
+        </button>
       </div>
 
       <div className="main-canvas-container">
