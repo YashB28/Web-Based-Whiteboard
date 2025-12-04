@@ -1,35 +1,58 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useState } from "react";
+import Whiteboard from "./Whiteboard";
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [joined, setJoined] = useState(false);
+  const [roomId, setRoomId] = useState("");
+  const [userName, setUserName] = useState("");
+
+  const handleJoin = (e) => {
+    e.preventDefault();
+    if (!roomId.trim() || !userName.trim()) return;
+    setJoined(true);
+  };
+
+  const handleLeave = () => {
+    setJoined(false);
+  };
+
+  if (!joined) {
+    return (
+      <div className="app-center">
+        <div className="card">
+          <h1>Collaborative Whiteboard</h1>
+          <p>Enter a display name and room ID to start collaborating.</p>
+          <form onSubmit={handleJoin}>
+            <div className="field">
+              <label>Display Name</label>
+              <input
+                type="text"
+                value={userName}
+                onChange={(e) => setUserName(e.target.value)}
+                placeholder="e.g. Yash"
+              />
+            </div>
+            <div className="field">
+              <label>Room ID</label>
+              <input
+                type="text"
+                value={roomId}
+                onChange={(e) => setRoomId(e.target.value)}
+                placeholder="e.g. room-123"
+              />
+            </div>
+            <button type="submit" className="button-primary">
+              Join Whiteboard
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    <Whiteboard roomId={roomId} userName={userName} onLeave={handleLeave} />
+  );
 }
 
-export default App
+export default App;
