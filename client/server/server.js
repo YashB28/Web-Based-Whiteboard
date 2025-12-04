@@ -33,9 +33,46 @@ const io = new Server(server, {
   },
 });
 
-// Handle socket connections
+// --- REAL-TIME LOGIC ---
+
 io.on("connection", (socket) => {
-  console.log("A client connected:", socket.id);
+  console.log("Client connected:", socket.id);
+
+  // When a user joins a room
+  socket.on("join_room", ({ roomId, userName }) => {
+    if (!roomId) return;
+    socket.join(roomId);
+    console.log(`Socket ${socket.id} joined room ${roomId} as ${userName}`);
+
+    // Notify others in the room
+    socket.to(roomId).emit("user_joined", {
+      userName,
+      socketId: socket.id,
+    });
+  });
+
+  // When a client draws a stroke
+  socket.on("draw", (data) => {
+    const { roomId, x0, y0, x1, y1, color, lineWidth } = data || {};
+    if (!roomId) return;
+
+    // Broadcast to all OTHER clients in the same room
+    socket.to(roomId).emit("draw", {
+      x0,
+      y0,
+      x1,
+      y1,
+      color,
+      lineWidth,
+    });
+  });
+
+  // When a client clears the board
+  socket.on("clear", (roomId) => {
+    if (!roomId) return;
+    console.log(`Clear requested in room ${roomId}`);
+    socket.to(roomId).emit("clear");
+  });
 
   socket.on("disconnect", () => {
     console.log("Client disconnected:", socket.id);
