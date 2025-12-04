@@ -1,9 +1,8 @@
 import { useRef, useEffect, useState } from "react";
 import { io } from "socket.io-client";
 
-// Backend Socket.IO + API base URL
-const SOCKET_URL =
-  import.meta.env.VITE_BACKEND_URL || "http://localhost:4000";
+
+const SOCKET_URL = "https://web-based-whiteboard.onrender.com";
 const API_BASE = SOCKET_URL;
 
 function Whiteboard({ roomId, userName, onLeave }) {
@@ -21,7 +20,11 @@ function Whiteboard({ roomId, userName, onLeave }) {
 
   // --- Socket.IO setup ---
   useEffect(() => {
-    const socket = io(SOCKET_URL);
+    const socket = io(SOCKET_URL, {
+      transports: ["websocket"],
+      path: "/socket.io",
+      withCredentials: true,
+    });
 
     socketRef.current = socket;
 
@@ -38,6 +41,7 @@ function Whiteboard({ roomId, userName, onLeave }) {
       console.log("User joined:", data);
     });
 
+    // When other users draw
     socket.on("draw", (data) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -46,6 +50,7 @@ function Whiteboard({ roomId, userName, onLeave }) {
       drawLine(ctx, x0, y0, x1, y1, color, lineWidth);
     });
 
+    // When another user clears the board
     socket.on("clear", () => {
       clearCanvas();
     });
@@ -114,8 +119,10 @@ function Whiteboard({ roomId, userName, onLeave }) {
     const { x: x0, y: y0 } = lastPointRef.current;
     const { x: x1, y: y1 } = newPos;
 
+    // Draw locally
     drawLine(ctx, x0, y0, x1, y1, color, lineWidth);
 
+    // Broadcast to others
     socketRef.current?.emit("draw", {
       roomId,
       x0,
@@ -146,6 +153,7 @@ function Whiteboard({ roomId, userName, onLeave }) {
     socketRef.current?.emit("clear", roomId);
   };
 
+  // --- Save current whiteboard as image to backend ---
   const handleSave = async () => {
     try {
       setIsSaving(true);
@@ -175,6 +183,7 @@ function Whiteboard({ roomId, userName, onLeave }) {
     }
   };
 
+  // --- Load saved whiteboard image from backend ---
   const handleLoad = async () => {
     try {
       setIsLoading(true);
