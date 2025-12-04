@@ -3,7 +3,7 @@ import { io } from "socket.io-client";
 
 // Backend Socket.IO + API base URL
 const SOCKET_URL =
-  "https://organic-potato-4jg9w56rxqpj27jv-4000.app.github.dev";
+  import.meta.env.VITE_BACKEND_URL || "http://localhost:4000";
 const API_BASE = SOCKET_URL;
 
 function Whiteboard({ roomId, userName, onLeave }) {
